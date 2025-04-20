@@ -1,133 +1,176 @@
 #!/usr/bin/env python3
-# IP Tracker by Dan Jersey
-# Version: 1.2
-# Features: Géolocalisation, fournisseur d'accès, carte approximative, proxy/VPN detection
+# IP Tracker Pro by Dan Jersey
+# Version: 2.0
+# Fonctionnalités : Tracking IP, numéro de téléphone, username et détection VPN
 
-import requests
 import json
-import socket
-import webbrowser
-import sys
-from datetime import datetime
+import requests
+import os
+import phonenumbers
+from phonenumbers import carrier, geocoder, timezone
+from sys import stderr
 import argparse
+from datetime import datetime
 
-# Couleurs pour le terminal
-class Colors:
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'
-    PURPLE = '\033[95m'
+# Couleurs pour l'affichage
+class Couleurs:
+    ROUGE = '\033[91m'
+    VERT = '\033[92m'
+    JAUNE = '\033[93m'
+    BLEU = '\033[94m'
+    VIOLET = '\033[95m'
     CYAN = '\033[96m'
-    WHITE = '\033[97m'
+    BLANC = '\033[97m'
     RESET = '\033[0m'
-    BOLD = '\033[1m'
+    GRAS = '\033[1m'
 
 # Configuration de l'API
-API_URL = "http://ip-api.com/json/"
-FIELDS = "?fields=status,message,continent,continentCode,country,countryCode,region,regionName,city,district,zip,lat,lon,timezone,offset,currency,isp,org,as,asname,reverse,mobile,proxy,hosting,query"
+API_IP = "http://ipwho.is/"
+API_TELEPHONE = "http://apilayer.net/api/validate"
 
-def get_ip_info(ip_address=""):
-    """Récupère les informations d'une IP via l'API"""
+def afficher_banniere():
+    """Affiche la bannière du programme"""
+    stderr.writelines(f"""
+{Couleurs.CYAN}
+  _____ _____   ____   _____ ____  _____ ______ _____  
+ |_   _|  __ \ / __ \ / ____/ __ \|  __ \  ____|  __ \ 
+   | | | |__) | |  | | |   | |  | | |__) | |__  | |__) |
+   | | |  ___/| |  | | |   | |  | |  _  /|  __| |  ___/ 
+  _| |_| |    | |__| | |___| |__| | | \ \| |____| |     
+ |_____|_|     \____/ \_____\____/|_|  \_\______|_|     
+
+{Couleurs.VIOLET}          [ + ] OUTIL PROFESSIONNEL DE TRACKING [ + ]
+{Couleurs.BLEU}          [ + ] Code par Dan Jersey - 2023 [ + ]
+{Couleurs.RESET}
+""")
+
+def tracker_ip(ip=None):
+    """Track une adresse IP et affiche les informations"""
     try:
-        response = requests.get(API_URL + ip_address + FIELDS)
-        data = response.json()
-        
-        if data.get('status') == 'fail':
-            print(f"{Colors.RED}Erreur: {data.get('message', 'Unknown error')}{Colors.RESET}")
-            return None
+        if not ip:
+            ip = requests.get('https://api.ipify.org').text
             
-        return data
-    except Exception as e:
-        print(f"{Colors.RED}Erreur de connexion à l'API: {e}{Colors.RESET}")
-        return None
-
-def print_ip_info(data):
-    """Affiche joliment les informations de l'IP"""
-    if not data:
-        return
+        print(f"\n{Couleurs.BLEU}>>> Recherche d'information pour l'IP: {ip}{Couleurs.RESET}")
         
-    print(f"\n{Colors.BOLD}{Colors.CYAN}=== INFORMATION SUR L'IP ==={Colors.RESET}")
-    print(f"{Colors.BLUE}IP: {Colors.WHITE}{data.get('query', 'N/A')}{Colors.RESET}")
-    print(f"{Colors.BLUE}Localisation: {Colors.WHITE}{data.get('city', 'N/A')}, {data.get('regionName', 'N/A')}, {data.get('country', 'N/A')} ({data.get('countryCode', 'N/A')}){Colors.RESET}")
-    print(f"{Colors.BLUE}Coordonnées: {Colors.WHITE}Latitude {data.get('lat', 'N/A')}, Longitude {data.get('lon', 'N/A')}{Colors.RESET}")
-    print(f"{Colors.BLUE}Fuseau horaire: {Colors.WHITE}{data.get('timezone', 'N/A')} (UTC {data.get('offset', 'N/A')}){Colors.RESET}")
-    print(f"{Colors.BLUE}Fournisseur: {Colors.WHITE}{data.get('isp', 'N/A')}{Colors.RESET}")
-    print(f"{Colors.BLUE}Organisation: {Colors.WHITE}{data.get('org', 'N/A')}{Colors.RESET}")
-    
-    # Détection spéciale
-    special = []
-    if data.get('proxy', False):
-        special.append(f"{Colors.RED}Proxy/VPN détecté{Colors.RESET}")
-    if data.get('hosting', False):
-        special.append(f"{Colors.RED}Hébergement web{Colors.RESET}")
-    if data.get('mobile', False):
-        special.append(f"{Colors.GREEN}Connexion mobile{Colors.RESET}")
+        reponse = requests.get(f"{API_IP}{ip}")
+        donnees = reponse.json()
         
-    if special:
-        print(f"{Colors.BLUE}Détection: {Colors.WHITE}{', '.join(special)}{Colors.RESET}")
-
-def show_on_map(lat, lon):
-    """Ouvre la localisation dans OpenStreetMap"""
-    map_url = f"https://www.openstreetmap.org/?mlat={lat}&mlon={lon}#map=12/{lat}/{lon}"
-    print(f"\n{Colors.GREEN}Ouverture de la carte dans votre navigateur...{Colors.RESET}")
-    webbrowser.open(map_url)
-
-def get_local_ip():
-    """Récupère l'IP locale"""
-    try:
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        return local_ip
-    except:
-        return None
-
-def save_to_file(data, filename="ip_tracker_results.txt"):
-    """Sauvegarde les résultats dans un fichier"""
-    try:
-        with open(filename, 'a') as f:
-            f.write(f"\n=== Résultats du {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n")
-            for key, value in data.items():
-                f.write(f"{key}: {value}\n")
-            f.write("="*50 + "\n")
-        print(f"\n{Colors.GREEN}Résultats sauvegardés dans {filename}{Colors.RESET}")
+        if donnees.get("success", True) == False:
+            print(f"{Couleurs.ROUGE}Erreur: {donnees.get('message', 'Inconnue')}{Couleurs.RESET}")
+            return
+            
+        print(f"\n{Couleurs.CYAN}=== INFORMATIONS IP ==={Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}IP: {Couleurs.VERT}{donnees.get('ip', 'N/A')}{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Localisation: {Couleurs.VERT}{donnees.get('city', 'N/A')}, {donnees.get('region', 'N/A')}, {donnees.get('country', 'N/A')}{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Coordonnées: {Couleurs.VERT}Latitude {donnees.get('latitude', 'N/A')}, Longitude {donnees.get('longitude', 'N/A')}{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Carte: {Couleurs.VERT}https://www.google.com/maps/@{donnees.get('latitude')},{donnees.get('longitude')},10z{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Fournisseur: {Couleurs.VERT}{donnees.get('connection', {}).get('isp', 'N/A')}{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Organisation: {Couleurs.VERT}{donnees.get('connection', {}).get('org', 'N/A')}{Couleurs.RESET}")
+        
+        if donnees.get('vpn', False) or donnees.get('proxy', False):
+            print(f"{Couleurs.BLANC}Détection: {Couleurs.ROUGE}VPN/Proxy détecté!{Couleurs.RESET}")
+            
+        print(f"{Couleurs.CYAN}======================={Couleurs.RESET}")
+        
     except Exception as e:
-        print(f"{Colors.RED}Erreur lors de la sauvegarde: {e}{Colors.RESET}")
+        print(f"{Couleurs.ROUGE}Erreur: {e}{Couleurs.RESET}")
 
-def main():
-    # Configuration des arguments
-    parser = argparse.ArgumentParser(description="IP Tracker by Dan Jersey")
-    parser.add_argument("ip", nargs="?", help="Adresse IP à tracker (vide pour votre IP publique)")
-    parser.add_argument("-m", "--map", action="store_true", help="Ouvrir la carte de localisation")
-    parser.add_argument("-s", "--save", action="store_true", help="Sauvegarder les résultats dans un fichier")
-    parser.add_argument("-l", "--local", action="store_true", help="Afficher seulement l'IP locale")
-    args = parser.parse_args()
+def tracker_telephone(numero):
+    """Track un numéro de téléphone"""
+    try:
+        print(f"\n{Couleurs.BLEU}>>> Analyse du numéro: {numero}{Couleurs.RESET}")
+        
+        numero_parse = phonenumbers.parse(numero)
+        valide = phonenumbers.is_valid_number(numero_parse)
+        
+        print(f"\n{Couleurs.CYAN}=== INFORMATIONS TELEPHONE ==={Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Numéro: {Couleurs.VERT}{phonenumbers.format_number(numero_parse, phonenumbers.PhoneNumberFormat.INTERNATIONAL)}{Couleurs.RESET}")
+        print(f"{Couleurs.BLANC}Valide: {Couleurs.VERT}{'Oui' if valide else 'Non'}{Couleurs.RESET}")
+        
+        if valide:
+            operateur = carrier.name_for_number(numero_parse, "fr")
+            localisation = geocoder.description_for_number(numero_parse, "fr")
+            fuseaux = timezone.time_zones_for_number(numero_parse)
+            
+            print(f"{Couleurs.BLANC}Opérateur: {Couleurs.VERT}{operateur or 'Inconnu'}{Couleurs.RESET}")
+            print(f"{Couleurs.BLANC}Localisation: {Couleurs.VERT}{localisation or 'Inconnue'}{Couleurs.RESET}")
+            print(f"{Couleurs.BLANC}Fuseau(x) horaire(s): {Couleurs.VERT}{', '.join(fuseaux) if fuseaux else 'Inconnu'}{Couleurs.RESET}")
+        
+        print(f"{Couleurs.CYAN}=============================={Couleurs.RESET}")
+        
+    except Exception as e:
+        print(f"{Couleurs.ROUGE}Erreur: {e}{Couleurs.RESET}")
 
-    print(f"{Colors.BOLD}{Colors.PURPLE}\nIP Tracker by Dan Jersey{Colors.RESET}")
+def tracker_utilisateur(username):
+    """Recherche un username sur les réseaux sociaux"""
+    try:
+        print(f"\n{Couleurs.BLEU}>>> Recherche de l'utilisateur: @{username}{Couleurs.RESET}")
+        
+        reseaux = [
+            {"nom": "Facebook", "url": f"https://facebook.com/{username}"},
+            {"nom": "Instagram", "url": f"https://instagram.com/{username}"},
+            {"nom": "Twitter", "url": f"https://twitter.com/{username}"},
+            {"nom": "GitHub", "url": f"https://github.com/{username}"},
+            {"nom": "LinkedIn", "url": f"https://linkedin.com/in/{username}"},
+            {"nom": "TikTok", "url": f"https://tiktok.com/@{username}"},
+            {"nom": "YouTube", "url": f"https://youtube.com/{username}"}
+        ]
+        
+        print(f"\n{Couleurs.CYAN}=== RESULTATS RECHERCHE ==={Couleurs.RESET}")
+        
+        for reseau in reseaux:
+            try:
+                reponse = requests.get(reseau["url"], timeout=5)
+                if reponse.status_code == 200:
+                    print(f"{Couleurs.BLANC}[{Couleurs.VERT}+{Couleurs.BLANC}] {reseau['nom']}: {Couleurs.VERT}{reseau['url']}{Couleurs.RESET}")
+                else:
+                    print(f"{Couleurs.BLANC}[{Couleurs.ROUGE}-{Couleurs.BLANC}] {reseau['nom']}: {Couleurs.JAUNE}Non trouvé{Couleurs.RESET}")
+            except:
+                print(f"{Couleurs.BLANC}[{Couleurs.ROUGE}-{Couleurs.BLANC}] {reseau['nom']}: {Couleurs.ROUGE}Erreur de connexion{Couleurs.RESET}")
+                
+        print(f"{Couleurs.CYAN}=========================={Couleurs.RESET}")
+        
+    except Exception as e:
+        print(f"{Couleurs.ROUGE}Erreur: {e}{Couleurs.RESET}")
+
+def menu_principal():
+    """Affiche le menu principal"""
+    afficher_banniere()
+    print(f"\n{Couleurs.VIOLET}1. Tracker une IP")
+    print(f"2. Tracker un numéro de téléphone")
+    print(f"3. Rechercher un utilisateur")
+    print(f"4. Afficher mon IP publique")
+    print(f"0. Quitter{Couleurs.RESET}")
     
-    if args.local:
-        local_ip = get_local_ip()
-        if local_ip:
-            print(f"\n{Colors.GREEN}Votre IP locale: {local_ip}{Colors.RESET}")
+    try:
+        choix = input(f"\n{Couleurs.BLANC}Choisissez une option: {Couleurs.RESET}")
+        
+        if choix == "1":
+            ip = input(f"{Couleurs.BLANC}Entrez l'IP à tracker (vide pour votre IP): {Couleurs.RESET}")
+            tracker_ip(ip if ip else None)
+        elif choix == "2":
+            numero = input(f"{Couleurs.BLANC}Entrez le numéro (format international +33...): {Couleurs.RESET}")
+            tracker_telephone(numero)
+        elif choix == "3":
+            username = input(f"{Couleurs.BLANC}Entrez le username: {Couleurs.RESET}")
+            tracker_utilisateur(username)
+        elif choix == "4":
+            tracker_ip()
+        elif choix == "0":
+            print(f"\n{Couleurs.VERT}Au revoir!{Couleurs.RESET}")
+            exit()
         else:
-            print(f"{Colors.RED}Impossible de déterminer l'IP locale{Colors.RESET}")
-        return
-
-    # Tracker l'IP
-    target_ip = args.ip if args.ip else ""
-    ip_data = get_ip_info(target_ip)
-    
-    if ip_data:
-        print_ip_info(ip_data)
-        
-        # Options supplémentaires
-        if args.map and 'lat' in ip_data and 'lon' in ip_data:
-            show_on_map(ip_data['lat'], ip_data['lon'])
+            print(f"{Couleurs.ROUGE}Option invalide!{Couleurs.RESET}")
             
-        if args.save:
-            save_to_file(ip_data)
-    else:
-        print(f"{Colors.RED}Aucune donnée disponible pour cette IP{Colors.RESET}")
+        input(f"\n{Couleurs.BLANC}Appuyez sur Entrée pour continuer...{Couleurs.RESET}")
+        menu_principal()
+        
+    except KeyboardInterrupt:
+        print(f"\n{Couleurs.VERT}Au revoir!{Couleurs.RESET}")
+        exit()
 
 if __name__ == "__main__":
-    main()
+    try:
+        menu_principal()
+    except Exception as e:
+        print(f"{Couleurs.ROUGE}Erreur critique: {e}{Couleurs.RESET}")
