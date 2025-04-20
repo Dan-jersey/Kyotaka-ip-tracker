@@ -1,0 +1,10 @@
+# Requirements for IP Tracker Pro by Dan Jersey
+# Version: 2.0
+
+requests==2.31.0          # Pour les requêtes HTTP (API IP/Telephone)
+phonenumbers==8.13.22     # Pour le tracking des numéros de téléphone
+argparse==1.4.0           # Pour la gestion des arguments en ligne de commande
+python-dotenv==1.0.0      # Pour la gestion des variables d'environnement (optionnel)
+
+# Installation recommandée :
+# pip install -r requirements.txt
